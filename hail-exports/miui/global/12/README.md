@@ -6,6 +6,8 @@ Phone: Xiaomi Redmi 10
 
 OS: MIUI Global 12.5.20
 
+Android version: 11
+
 this export was filled with apps i installed myself xdxdxd
 
 also can t gurantee your safety w this, i tend to go quite extreme with things that were my old daily driver os
