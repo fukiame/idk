@@ -1,0 +1,25 @@
+From 4e40ec200db9decfb922dff9871b0cd17fd64308 Mon Sep 17 00:00:00 2001
+From: fukiame <fukiame@proton.me>
+Date: Wed, 20 Sep 2023 15:19:48 +0700
+Subject: [PATCH] tools/ak3-core: /dev/block/platform/bootdevice/by-name
+
+---
+ tools/ak3-core.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tools/ak3-core.sh b/tools/ak3-core.sh
+index 1582038..92486c6 100755
+--- a/tools/ak3-core.sh
++++ b/tools/ak3-core.sh
+@@ -431,7 +431,7 @@ flash_generic() {
+   done;
+ 
+   if [ "$img" -a ! -f ${1}_flashed ]; then
+-    for path in /dev/block/mapper /dev/block/by-name /dev/block/bootdevice/by-name; do
++    for path in /dev/block/mapper /dev/block/by-name /dev/block/bootdevice/by-name /dev/block/platform/bootdevice/by-name; do
+       for file in $1 $1$slot; do
+         if [ -e $path/$file ]; then
+           imgblock=$path/$file;
+-- 
+2.42.0
+

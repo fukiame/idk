@@ -1,0 +1,398 @@
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.c micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.c
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.c	2023-09-30 14:32:17.448000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.c	2023-09-30 10:01:21.256000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -55,7 +54,9 @@
+ struct DSI_TX_PHY_TIMCON3_REG timcon3;
+ unsigned int bg_tx_data_phy_cycle = 0, tx_data_rate = 0, ap_tx_data_rate = 0;
+ //unsigned int ap_tx_data_phy_cycle = 0;
+-unsigned int hsa_byte = 0, hbp_byte = 0, hfp_byte = 0, bllp_byte = 0, bg_tx_line_cycle = 0;
++/* Huaqin modify for HQ-146521 by caogaojie at 2021/08/02 start */
++int hsa_byte = 0, hbp_byte = 0, hfp_byte = 0, bllp_byte = 0, bg_tx_line_cycle = 0;
++/* Huaqin modify for HQ-146521 by caogaojie at 2021/08/02 end */
+ //unsigned int ap_tx_hsa_wc = 0, ap_tx_hbp_wc = 0, ap_tx_hfp_wc = 0, ap_tx_bllp_wc = 0;
+ unsigned int dsc_en;
+ unsigned int mt6382_init;
+@@ -94,8 +95,22 @@
+ 	unsigned char count;
+ 	unsigned char para_list[256];
+ };
+-
+-#define MM_CLK			546 //fpga=26
++/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 start */
++int mtk_mm_clk = 0;
++int mtk_rxtx_ratio = 0;
++extern char *saved_command_line;
++int mtk_panel_compare()
++{
++    if (strstr(saved_command_line, "dsi_panel_k19a_43_02_0b_dsc_vdo_lcm_drv")) {
++        mtk_mm_clk = 405;
++        mtk_rxtx_ratio = 232;
++    } else {
++	mtk_mm_clk = 270;
++        mtk_rxtx_ratio = 225;
++    }
++    return 0;
++}
++/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 end */
+ #define NS_TO_CYCLE(n, c)	((n) / (c) + (((n) % (c)) ? 1 : 0))
+ 
+ #define DSI_MODULE_to_ID(x)	(x == DISP_BDG_DSI0 ? 0 : 1)
+@@ -1469,8 +1484,12 @@
+ int bdg_tx_vdo_timing_set(enum DISP_BDG_ENUM module,
+ 			void *cmdq, struct LCM_DSI_PARAMS *tx_params)
+ {
+-	int i;
+-	u32 dsi_buf_bpp, data_init_byte;
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++	int i,j;
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
++/* Huaqin modify for HQ-146521 by caogaojie at 2021/08/02 start */
++	u32 dsi_buf_bpp = 0, data_init_byte = 0;
++/* Huaqin modify for HQ-146521 by caogaojie at 2021/08/02 end */
+ 
+ 	DISPFUNCSTART();
+ 
+@@ -1557,7 +1576,17 @@
+ 					(tx_params->vertical_backporch));
+ 		DSI_OUTREG32(cmdq, TX_REG[i]->DSI_TX_VFP_NL,
+ 					(tx_params->vertical_frontporch));
+-
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++#ifdef CONFIG_MTK_HIGH_FRAME_RATE
++		for (j = 0; j < DFPS_LEVELS; j++) {
++			if (tx_params->dfps_params[j].fps == 9000) {
++				DSI_OUTREG32(cmdq, TX_REG[i]->DSI_TX_VFP_NL,
++					(tx_params->dfps_params[j].vertical_frontporch));
++				break;
++			}
++		}
++#endif
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 		DSI_OUTREG32(cmdq, TX_REG[i]->DSI_TX_HSA_WC, hsa_byte);
+ 		DSI_OUTREG32(cmdq, TX_REG[i]->DSI_TX_HBP_WC, hbp_byte);
+ 		DSI_OUTREG32(cmdq, TX_REG[i]->DSI_TX_HFP_WC, hfp_byte);
+@@ -1986,12 +2015,14 @@
+ int bdg_dsi_line_timing_dphy_setting(enum DISP_BDG_ENUM module,
+ 			void *cmdq, struct LCM_DSI_PARAMS *tx_params)
+ {
++/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 start */
+ 	unsigned int width, height, lanes, ps_wc, new_hfp_byte;
+ 	unsigned int bg_tx_total_word_cnt = 0;
+ 	unsigned int bg_tx_line_time = 0, disp_pipe_line_time = 0;
+ 	unsigned int rxtx_ratio = 0;
+ //	unsigned int ap_tx_total_word_cnt = 0, ap_tx_total_word_cnt_no_hfp_wc = 0;
+ 
++	mtk_panel_compare();
+ 	DISPFUNCSTART();
+ 	width = tx_params->horizontal_active_pixel / 1;
+ 	height = tx_params->vertical_active_line;
+@@ -2002,12 +2033,13 @@
+ 	if (dsc_en) {
+ //		ps_wc = width;
+ 		ps_wc = width * 24 / 8 / 3;	/* for 8bpp, 1/3 compression */
+-		rxtx_ratio = RXTX_RATIO;	/* ratio=2.30 */
++		rxtx_ratio = mtk_rxtx_ratio;        /* ratio=2.30 */
+ 	} else {
+ 		ps_wc = width * 24 / 8;	/* for 8bpp, 1/3 compression */
+ 		rxtx_ratio = 100;
+ 	}
+ 	new_hfp_byte = hfp_byte;
++/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 end */
+ 
+ 	DISPMSG("%s, dsc_en=%d, hsa_byte=%d, hbp_byte=%d\n",
+ 		__func__, dsc_en, hsa_byte, hbp_byte);
+@@ -2055,7 +2087,9 @@
+ 	bg_tx_line_cycle = (bg_tx_total_word_cnt + (lanes - 1)) / lanes;
+ 	bg_tx_line_time = bg_tx_line_cycle * 8000 / tx_data_rate;
+ 
+-	disp_pipe_line_time = width * 1000 / MM_CLK;
++	/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 start */
++	disp_pipe_line_time = width * 1000 / mtk_mm_clk;
++	/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 end */
+ 
+ 	DISPMSG("bg_tx_total_word_cnt=%d, bg_tx_line_cycle=%d\n",
+ 		bg_tx_total_word_cnt, bg_tx_line_cycle);
+@@ -4464,10 +4498,10 @@
+ 
+ 		if (ipi_mode_qst)
+ 			DSI_OUTREG32(cmdq, DSI2_REG->DSI2_DEVICE_IPI_MODE_CFG_OS, 1);
+-
+-		t_ipi_clk  = 1000 / MM_CLK;
++	/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 start */
++		t_ipi_clk  = 1000 / mtk_mm_clk;
+ 		//t_hact_ipi = frame_width * t_ipi_clk;
+-		t_hact_ipi = frame_width * 1000 / MM_CLK;
++		t_hact_ipi = frame_width * 1000 / mtk_mm_clk;
+ 		if (tx_params->IsCphy) { //c-phy
+ 			temp = 7000;
+ 			t_ppi_clk = temp / ap_tx_data_rate;
+@@ -4484,13 +4518,13 @@
+ 
+ 		if (t_hact_ppi > t_hact_ipi)
+ //ipi_tx_delay_qst = ((t_hact_ppi - t_hact_ipi) / t_ipi_clk + 20 * (t_ppi_clk / t_ipi_clk) + 4);
+-//ipi_tx_delay_qst = ((t_hact_ppi - t_hact_ipi) * MM_CLK / 1000 + 20 *
+-//(temp * MM_CLK / tx_data_rate / 1000) + 4);
+-			ipi_tx_delay_qst = ((t_hact_ppi - t_hact_ipi) * MM_CLK +
+-					20 * temp * MM_CLK / ap_tx_data_rate) / 1000 + 4;
++//ipi_tx_delay_qst = ((t_hact_ppi - t_hact_ipi) * mtk_mm_clk / 1000 + 20 *
++//(temp * mtk_mm_clk / tx_data_rate / 1000) + 4);
++			ipi_tx_delay_qst = ((t_hact_ppi - t_hact_ipi) * mtk_mm_clk +
++					20 * temp * mtk_mm_clk / ap_tx_data_rate) / 1000 + 4;
+ 		else
+-		//ipi_tx_delay_qst =  (20 * (temp * MM_CLK / tx_data_rate / 1000) + 4);
+-			ipi_tx_delay_qst =  20 * temp * MM_CLK /
++		//ipi_tx_delay_qst =  (20 * (temp * mtk_mm_clk / tx_data_rate / 1000) + 4);
++			ipi_tx_delay_qst =  20 * temp * mtk_mm_clk /
+ 				ap_tx_data_rate / 1000 + 4;
+ 
+ 		DISPINFO("ap_tx_data_rate=%d, temp=%d, t_ppi_clk=%d, t_ipi_clk=%d\n",
+@@ -4498,7 +4532,8 @@
+ 		DISPINFO("t_hact_ppi=%d, t_hact_ipi=%d\n", t_hact_ppi, t_hact_ipi);
+ 
+ 		//t_ipi_tx_delay = ipi_tx_delay_qst_i * t_ipi_clk;
+-		t_ipi_tx_delay = ipi_tx_delay_qst * 1000 / MM_CLK;
++		t_ipi_tx_delay = ipi_tx_delay_qst * 1000 / mtk_mm_clk;
++	/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 end */
+ 
+ 		DISPINFO("ipi_tx_delay_qst=%d, t_ipi_tx_delay=%d\n",
+ 			ipi_tx_delay_qst, t_ipi_tx_delay);
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.h micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.h
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.h	2023-09-30 14:32:17.448000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/dispsys/ddp_disp_bdg.h	2023-09-30 10:01:21.256000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -32,11 +31,6 @@
+ //#define _G_MODE_EN_
+ //#define _RX_V12_
+ //#define _HIGH_FRM_
+-#ifdef _HIGH_FRM_	 //for cmd 120Hz
+-#define RXTX_RATIO		(299)
+-#else
+-#define RXTX_RATIO		(225) //for vdo 90Hz
+-#endif
+ 
+ enum DISP_BDG_ENUM {
+ 	DISP_BDG_DSI0 = 0,
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/dispsys/ddp_dsi.c micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/dispsys/ddp_dsi.c
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/dispsys/ddp_dsi.c	2023-09-30 14:32:17.448000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/dispsys/ddp_dsi.c	2023-09-30 10:01:22.376000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -878,7 +877,9 @@
+ 		if (type == DSI_VFP) {
+ 			DISPINFO("set dsi%d vfp to %d\n", i, value);
+ 			DSI_OUTREG32(handle, &DSI_REG[i]->DSI_VFP_NL, value);
+-			if (bdg_is_bdg_connected() == 1)
++		/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++			if (pgc->vfp_chg_sync_bdg && bdg_is_bdg_connected() == 1)
++		/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 				ddp_dsi_set_bdg_porch_setting(module, handle, value);
+ 		/* Huaqin modify for HQ-141505 by caogaojie at 2021/06/18 start */
+ 			if(value == 54){
+@@ -948,6 +949,9 @@
+ 	}
+ }
+ 
++/* Huaqin add for K19S-31 by jiangyue at 2022/01/14 start */
++extern int mtk_rxtx_ratio;
++/* Huaqin add for K19S-31 by jiangyue at 2022/01/14 end */
+ void DSI_Config_VDO_Timing_with_DSC(enum DISP_MODULE_ENUM module,
+ 	struct cmdqRecStruct *cmdq, struct LCM_DSI_PARAMS *dsi_params)
+ {
+@@ -1023,7 +1027,9 @@
+ 		t_hbp = 4;
+ 		ps_wc = dsi_params->horizontal_active_pixel * dsiTmpBufBpp / 8;
+ 		t_hbllp = 16 * dsi_params->LANE_NUM;
+-		ap_tx_total_word_cnt = (get_bdg_line_cycle() * lanes * RXTX_RATIO + 99) / 100;
++/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 start */
++		ap_tx_total_word_cnt = (get_bdg_line_cycle() * lanes * mtk_rxtx_ratio + 99) / 100;
++/* Huaqin modify for K19S-31 by jiangyue at 2022/01/14 end */
+ 
+ 		switch (dsi_params->mode) {
+ 		case DSI_CMD_MODE:
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/disp_lowpower.c micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/disp_lowpower.c
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/disp_lowpower.c	2023-09-30 14:32:17.464000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/disp_lowpower.c	2023-09-30 10:01:22.404000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -374,7 +373,9 @@
+ 	}
+ 
+ 	if (state == 1 || state == 0) {
+-		if (bdg_is_bdg_connected() == 1) {
++	/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++		if (pgc->vfp_chg_sync_bdg && bdg_is_bdg_connected() == 1) {
++	/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 			cmdqRecWait(handle, CMDQ_EVENT_MUTEX0_STREAM_EOF);
+ 
+ 			/* 2.stop dsi vdo mode */
+@@ -398,10 +399,10 @@
+ 						DDP_DSI_PORCH_CHANGE, &apply_vfp);
+ 		}
+ 	}
+-/* Huaqin modify for HQ-141739 by caogaojie at 2021/07/05 start */
+-	if (bdg_is_bdg_connected() != 1)
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++	if (!pgc->vfp_chg_sync_bdg)
+ 		cmdqRecFlushAsync(handle);
+-/* Huaqin modify for HQ-141739 by caogaojie at 2021/07/05 end*/
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 	cmdqRecDestroy(handle);
+ 	return ret;
+ }
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/disp_recovery.c micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/disp_recovery.c
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/disp_recovery.c	2023-09-30 14:32:17.464000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/disp_recovery.c	2023-09-30 10:01:22.404000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2016 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -70,7 +69,9 @@
+ #include "disp_partial.h"
+ #include "ddp_dsi.h"
+ #include "ddp_disp_bdg.h"
+-
++/*K19S code for HQ-168893 by gaoxue at 2021/11/23 start*/
++bool esd_flag;
++/*K19S code for HQ-168893 by gaoxue at 2021/11/23 end*/
+ /* For abnormal check */
+ static struct task_struct *primary_display_check_task;
+ /* used for blocking check task  */
+@@ -712,6 +713,9 @@
+ /* Huaqin modify for HQ-124138 by dongtingchi at 2021/04/29 start */
+ #ifndef CONFIG_MI_ERRFLAG_ESD_CHECK_ENABLE
+ 	int recovery_done = 0;
++/*K19S code for HQ-168893 by gaoxue at 2021/11/23 start*/
++	esd_flag = false;
++/*K19S code for HQ-168893 by gaoxue at 2021/11/23 end*/
+ #endif
+ /* Huaqin modify for HQ-124138 by dongtingchi at 2021/04/29 end */
+ 
+@@ -781,9 +785,9 @@
+ #else
+ 	while (1) {
+ next:		if(!atomic_read(&lcm_ready)){
+-	/* Huaqin modify for HQ-138988 by caogaojie at 2021/07/09 start */
+-			msleep(2000);
+-	/* Huaqin modify for HQ-138988 by caogaojie at 2021/07/09 end */
++	/* Huaqin modify for HQ-161950 by jiangyue at 2021/11/05 start */
++			msleep(700);
++	/* Huaqin modify for HQ-161950 by jiangyue at 2021/11/05 end */
+ 			continue;
+ 		}
+ 		DISPINFO("[ESD] primary_display_check_recovery_worker_kthread start 2");
+@@ -797,6 +801,10 @@
+ 			DISPERR(
+ 				"[ESD]esd check fail, will do esd recovery. try=%d\n",
+ 				i);
++/*K19S code for HQ-168893 by gaoxue at 2021/11/23 start*/
++			esd_flag = true;
++			DISPERR("[ESD]Now esd_flag = %d\n",esd_flag);
++/*K19S code for HQ-168893 by gaoxue at 2021/11/23 end*/
+ 			primary_display_esd_recovery();
+ 			goto next;
+ 		} while (++i < esd_try_cnt);
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/primary_display.c micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/primary_display.c
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/primary_display.c	2023-09-30 14:32:17.472000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/primary_display.c	2023-09-30 10:01:22.416000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -4465,6 +4464,9 @@
+ 
+ 	pgc->lcm_fps = lcm_fps;
+ 	pgc->lcm_refresh_rate = 60;
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++	pgc->vfp_chg_sync_bdg = false;
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 	/* keep lowpower init after setting lcm_fps */
+ 	primary_display_lowpower_init();
+ 
+@@ -10542,8 +10544,9 @@
+ 			return;
+ 		}
+ 		cmdqRecReset(qhandle);
+-
+-		if (bdg_is_bdg_connected() != 1) {
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++		if (!pgc->vfp_chg_sync_bdg) {
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 			if (need_send_cmd) {
+ 				cmdqRecWait(qhandle, CMDQ_EVENT_MUTEX0_STREAM_EOF);
+ 				DISPMSG("%s,send cmd to lcm in VFP solution\n", __func__);
+@@ -10557,8 +10560,10 @@
+ 
+ 			cmdqRecFlushAsync(qhandle);
+ 		} else {
+-			cmdqRecWait(qhandle, CMDQ_EVENT_MUTEX0_STREAM_EOF);
+-
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++			if (bdg_is_bdg_connected() == 1) {
++				cmdqRecWait(qhandle, CMDQ_EVENT_MUTEX0_STREAM_EOF);
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 			/* stop dsi vdo mode */
+ 			dpmgr_path_build_cmdq(primary_get_dpmgr_handle(),
+ 				qhandle, CMDQ_STOP_VDO_MODE, 0);
+@@ -10573,8 +10578,10 @@
+ 
+ 			ddp_mutex_set_sof_wait(dpmgr_path_get_mutex(
+ 				primary_get_dpmgr_handle()), qhandle, 0);
+-
+-			cmdqRecFlush(qhandle);
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 start */
++				cmdqRecFlush(qhandle);
++			}
++/* Huaqin modify for HQ-179522 by jiangyue at 2022/01/24 end */
+ 		}
+ 	}
+ 	cmdqRecDestroy(qhandle);
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/primary_display.h micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/primary_display.h
+--- old-micode_selene-r-oss/drivers/misc/mediatek/video/mt6768/videox/primary_display.h	2023-09-30 14:32:17.472000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/video/mt6768/videox/primary_display.h	2023-09-30 10:01:22.420000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (C) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 as
+@@ -287,6 +286,10 @@
+ 	unsigned int first_cfg;
+ 	/*DynFPS end*/
+ #endif
++/* Huaqin add for HQ-179522 by jiangyue at 2022/01/24 start */
++	/* change vfp for ap dsi and 6382 at same time */
++	bool vfp_chg_sync_bdg;
++/* Huaqin add for HQ-179522 by jiangyue at 2022/01/24 end */
+ };
+ 
+ static inline char *lcm_power_state_to_string(enum lcm_power_state ps)

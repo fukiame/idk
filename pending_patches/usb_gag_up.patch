@@ -1,0 +1,102 @@
+diff -Naur old-micode_selene-r-oss/drivers/usb/gadget/composite.c micode_selene-r-oss-update/drivers/usb/gadget/composite.c
+--- old-micode_selene-r-oss/drivers/usb/gadget/composite.c	2023-09-30 14:32:21.240000191 +0700
++++ micode_selene-r-oss-update/drivers/usb/gadget/composite.c	2023-09-30 10:01:29.996000013 +0700
+@@ -1629,6 +1629,18 @@
+ 	u8				endp;
+ 	static DEFINE_RATELIMIT_STATE(ratelimit, 1 * HZ, 5);
+ 
++	if (w_length > USB_COMP_EP0_BUFSIZ) {
++		if (ctrl->bRequestType & USB_DIR_IN) {
++			/* Cast away the const, we are going to overwrite on purpose. */
++			__le16 *temp = (__le16 *)&ctrl->wLength;
++
++			*temp = cpu_to_le16(USB_COMP_EP0_BUFSIZ);
++			w_length = USB_COMP_EP0_BUFSIZ;
++		} else {
++			goto done;
++		}
++	}
++
+ 	/* partial re-init of the response message; the function or the
+ 	 * gadget might need to intercept e.g. a control-OUT completion
+ 	 * when we delegate to it.
+@@ -2213,7 +2225,7 @@
+ 	if (!cdev->req)
+ 		return -ENOMEM;
+ 
+-	cdev->req->buf = kmalloc(USB_COMP_EP0_BUFSIZ, GFP_KERNEL);
++	cdev->req->buf = kzalloc(USB_COMP_EP0_BUFSIZ, GFP_KERNEL);
+ 	if (!cdev->req->buf)
+ 		goto fail;
+ 
+diff -Naur old-micode_selene-r-oss/drivers/usb/gadget/legacy/dbgp.c micode_selene-r-oss-update/drivers/usb/gadget/legacy/dbgp.c
+--- old-micode_selene-r-oss/drivers/usb/gadget/legacy/dbgp.c	2023-09-30 14:32:21.260000191 +0700
++++ micode_selene-r-oss-update/drivers/usb/gadget/legacy/dbgp.c	2023-09-30 10:01:30.016000013 +0700
+@@ -136,7 +136,7 @@
+ 		goto fail_1;
+ 	}
+ 
+-	req->buf = kmalloc(DBGP_REQ_LEN, GFP_KERNEL);
++	req->buf = kzalloc(DBGP_REQ_LEN, GFP_KERNEL);
+ 	if (!req->buf) {
+ 		err = -ENOMEM;
+ 		stp = 2;
+@@ -344,6 +344,18 @@
+ 	void *data = NULL;
+ 	u16 len = 0;
+ 
++	if (length > DBGP_REQ_LEN) {
++		if (ctrl->bRequestType & USB_DIR_IN) {
++			/* Cast away the const, we are going to overwrite on purpose. */
++			__le16 *temp = (__le16 *)&ctrl->wLength;
++
++			*temp = cpu_to_le16(DBGP_REQ_LEN);
++			length = DBGP_REQ_LEN;
++		} else {
++			return err;
++		}
++	}
++
+ 	if (request == USB_REQ_GET_DESCRIPTOR) {
+ 		switch (value>>8) {
+ 		case USB_DT_DEVICE:
+diff -Naur old-micode_selene-r-oss/drivers/usb/gadget/legacy/inode.c micode_selene-r-oss-update/drivers/usb/gadget/legacy/inode.c
+--- old-micode_selene-r-oss/drivers/usb/gadget/legacy/inode.c	2023-09-30 14:32:21.264000191 +0700
++++ micode_selene-r-oss-update/drivers/usb/gadget/legacy/inode.c	2023-09-30 10:01:30.020000013 +0700
+@@ -113,6 +113,8 @@
+ /* enough for the whole queue: most events invalidate others */
+ #define	N_EVENT			5
+ 
++#define RBUF_SIZE		256
++
+ struct dev_data {
+ 	spinlock_t			lock;
+ 	refcount_t			count;
+@@ -147,7 +149,7 @@
+ 	struct dentry			*dentry;
+ 
+ 	/* except this scratch i/o buffer for ep0 */
+-	u8				rbuf [256];
++	u8				rbuf[RBUF_SIZE];
+ };
+ 
+ static inline void get_dev (struct dev_data *data)
+@@ -1336,6 +1338,18 @@
+ 	u16				w_value = le16_to_cpu(ctrl->wValue);
+ 	u16				w_length = le16_to_cpu(ctrl->wLength);
+ 
++	if (w_length > RBUF_SIZE) {
++		if (ctrl->bRequestType & USB_DIR_IN) {
++			/* Cast away the const, we are going to overwrite on purpose. */
++			__le16 *temp = (__le16 *)&ctrl->wLength;
++
++			*temp = cpu_to_le16(RBUF_SIZE);
++			w_length = RBUF_SIZE;
++		} else {
++			return value;
++		}
++	}
++
+ 	spin_lock (&dev->lock);
+ 	dev->setup_abort = 0;
+ 	if (dev->state == STATE_DEV_UNCONNECTED) {

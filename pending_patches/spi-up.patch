@@ -1,0 +1,39 @@
+diff -Naur old-micode_selene-r-oss/drivers/spi/spi-mt65xx.c micode_selene-r-oss-update/drivers/spi/spi-mt65xx.c
+--- old-micode_selene-r-oss/drivers/spi/spi-mt65xx.c	2023-09-30 14:32:19.836000191 +0700
++++ micode_selene-r-oss-update/drivers/spi/spi-mt65xx.c	2023-09-30 10:01:28.496000013 +0700
+@@ -1,6 +1,5 @@
+ /*
+  * Copyright (c) 2015 MediaTek Inc.
+- * Copyright (C) 2021 XiaoMi, Inc.
+  * Author: Leilk Liu <leilk.liu@mediatek.com>
+  *
+  * This program is free software; you can redistribute it and/or modify
+@@ -860,6 +859,9 @@
+ 				goto err_put_master;
+ 			}
+ 		}
++/*K19A coad for HQ-147450 by feiwen at 2021/7/23 start*/
++		master->num_chipselect = mdata->pad_num;
++/*K19A coad for HQ-147450 by feiwen at 2021/7/23 end*/
+ 	}
+ 
+ 	pm_qos_add_request(&mdata->spi_qos_request, PM_QOS_CPU_DMA_LATENCY,
+@@ -949,14 +951,16 @@
+ 			ret = -EINVAL;
+ 			goto err_disable_runtime_pm;
+ 		}
+-
++/*K19A coad for HQ-147450 by feiwen at 2021/7/23 start*/
++/*
+ 		if (!master->cs_gpios && master->num_chipselect > 1) {
+ 			dev_err(&pdev->dev,
+ 				"cs_gpios not specified and num_chipselect > 1\n");
+ 			ret = -EINVAL;
+ 			goto err_disable_runtime_pm;
+ 		}
+-
++*/
++/*K19A coad for HQ-147450 by feiwen at 2021/7/23 end*/
+ 		if (master->cs_gpios) {
+ 			for (i = 0; i < master->num_chipselect; i++) {
+ 				ret = devm_gpio_request(&pdev->dev,

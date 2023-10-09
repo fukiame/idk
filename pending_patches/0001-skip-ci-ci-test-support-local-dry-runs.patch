@@ -1,0 +1,101 @@
+From 3169ee544e8b66bf12f3455e686e2a162aa617ba Mon Sep 17 00:00:00 2001
+From: fukiame <fukiame@proton.me>
+Date: Sat, 23 Sep 2023 13:57:06 +0700
+Subject: [PATCH] [skip ci] ci/test: support local dry runs
+
+detects if the script is running inside Cirrus,
+if ran locally, accept 2 arguments:
+* the first one is branch name, for pr builds it would be pull/<random number>
+* the second one is commit message/ pr name
+
+also disables checks that shouldnt be performed locally
+
+example:
+
+# for a pr build
+bash ci/test.sh pull/24460 selene-crdroidandroid-13.0-TelegramAt25
+
+# for a push build
+bash ci/test.sh selene-crdroidandroid-13.0-TelegramAt25 "triggr build"
+---
+ ci/test.sh | 53 +++++++++++++++++++++++++++++++++--------------------
+ 1 file changed, 33 insertions(+), 20 deletions(-)
+
+diff --git a/ci/test.sh b/ci/test.sh
+index 9b7a199..87075d8 100755
+--- a/ci/test.sh
++++ b/ci/test.sh
+@@ -2,6 +2,14 @@
+ 
+ set -e
+ 
++if [[ -z $CIRRUS_WORKING_DIR ]]; then
++	echo running locally
++	export LOCAL=1
++	export CIRRUS_WORKING_DIR=.
++	export BRANCH=$1
++	export CIRRUS_COMMIT_MESSAGE=$2
++fi
++
+ ccheck(){
+ 	check=$(grep "$1" $CIRRUS_WORKING_DIR/build_rom.sh | wc -l)
+ 	if [[ $check -gt 0 ]]; then echo "$2"; exit 1; fi
+@@ -108,24 +116,27 @@ if [[ $BRANCH == *pull/* ]]; then
+ 	if [[ $rom_name != 'Corvus-R-12-test' ]]; then
+ 		if [[ $lunch_check -gt 1 ]]; then echo Please build for one device at a time.; exit 1; fi
+ 	fi
+-	cd /tmp/cirrus-ci-build
+-	PR_NUM=$(echo $BRANCH|awk -F '/' '{print $2}')
+-	AUTHOR=$(gh pr view $PR_NUM|grep author| awk '{print $2}')
+-
+-	for id in 66806243 25178653 100027207 77049889 37245252 87101173 91236805 56505303 77262770 60956846 1133897 92011891 80823029 58514579 102499518 73420351 69832543
+-	do
+-		logins+=" $(gh api -H "Accept: application/vnd.github+json" /user/$id -q '.login')"
+-	done
+-
+-	for value in $logins
+-	do
+-		if [[ $AUTHOR == $value ]]; then echo Please check \#bad_people instruction in telegram group.; exit 1; fi
+-	done
+-
+-	joindate=$(date -d $(curl -s https://api.github.com/users/$AUTHOR | grep created_at | cut -d '"' -f4) +%s)
+-	nowdate=$(date +%s)
+-	datediff=$(expr $nowdate - $joindate)
+-	if [[ $datediff -lt 2592000 ]]; then echo Please don\'t try to run build with your new account. Use your original account for doing PR.; exit 1; fi
++
++	if [[ $LOCAL != 1 ]] ; then
++		cd /tmp/cirrus-ci-build
++		PR_NUM=$(echo $BRANCH|awk -F '/' '{print $2}')
++		AUTHOR=$(gh pr view $PR_NUM|grep author| awk '{print $2}')
++
++		for id in 66806243 25178653 100027207 77049889 37245252 87101173 91236805 56505303 77262770 60956846 1133897 92011891 80823029 58514579 102499518 73420351 69832543
++		do
++			logins+=" $(gh api -H "Accept: application/vnd.github+json" /user/$id -q '.login')"
++		done
++
++		for value in $logins
++		do
++			if [[ $AUTHOR == $value ]]; then echo Please check \#bad_people instruction in telegram group.; exit 1; fi
++		done
++
++		joindate=$(date -d $(curl -s https://api.github.com/users/$AUTHOR | grep created_at | cut -d '"' -f4) +%s)
++		nowdate=$(date +%s)
++		datediff=$(expr $nowdate - $joindate)
++		if [[ $datediff -lt 2592000 ]]; then echo Please don\'t try to run build with your new account. Use your original account for doing PR.; exit 1; fi
++	fi
+ fi
+ 
+ if [[ $CIRRUS_USER_PERMISSION == write ]]; then
+@@ -135,5 +146,7 @@ if [[ $CIRRUS_USER_PERMISSION == write ]]; then
+ fi
+ 
+ echo Test passed
+-echo "rom_name=$rom_name" >> $CIRRUS_ENV
+-echo "device=$device" >> $CIRRUS_ENV
++if [[ $LOCAL != 1 ]] ; then
++	echo "rom_name=$rom_name" >> $CIRRUS_ENV
++	echo "device=$device" >> $CIRRUS_ENV
++fi
+-- 
+2.42.0
+

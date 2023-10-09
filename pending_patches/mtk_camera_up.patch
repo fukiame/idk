@@ -1,0 +1,133 @@
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/cameraisp/src/mt6768/camera_isp.c micode_selene-r-oss-update/drivers/misc/mediatek/cameraisp/src/mt6768/camera_isp.c
+--- old-micode_selene-r-oss/drivers/misc/mediatek/cameraisp/src/mt6768/camera_isp.c	2023-09-30 14:32:14.784000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/cameraisp/src/mt6768/camera_isp.c	2023-09-30 10:01:15.584000012 +0700
+@@ -650,6 +650,11 @@
+  */
+ static unsigned int g_regScen = 0xa5a5a5a5; /* remove later */
+ 
++static unsigned int g_virtual_cq_cnt[2] = {0, 0};
++static unsigned int g_virtual_cq_cnt_a;
++static unsigned int g_virtual_cq_cnt_b;
++static  spinlock_t  virtual_cqcnt_lock;
++
+ 
+ static /*volatile*/ wait_queue_head_t P2WaitQueueHead_WaitDeque;
+ static /*volatile*/ wait_queue_head_t P2WaitQueueHead_WaitFrame;
+@@ -8944,6 +8949,26 @@
+ 		}
+ 		LOG_NOTICE("ISP_SET_SEC_ENABLE sec_on = %d\n", sec_on);
+ 		break;
++	case ISP_SET_VIR_CQCNT:
++		spin_lock((spinlock_t *)(&virtual_cqcnt_lock));
++		if (copy_from_user(&g_virtual_cq_cnt, (void *)Param,
++			sizeof(unsigned int)*2) == 0) {
++			LOG_NOTICE("From hw_module:%d Virtual CQ count from user land : %d\n",
++			g_virtual_cq_cnt[0], g_virtual_cq_cnt[1]);
++		} else {
++			LOG_NOTICE(
++				"Virtual CQ count copy_from_user failed\n");
++			Ret = -EFAULT;
++		}
++		if (g_virtual_cq_cnt[0] == 0) {
++			g_virtual_cq_cnt_a = g_virtual_cq_cnt[1];
++			LOG_NOTICE("Update Virtual CQ cnt for hw_module:0\n");
++		} else if (g_virtual_cq_cnt[0] == 1) {
++			g_virtual_cq_cnt_b = g_virtual_cq_cnt[1];
++			LOG_NOTICE("Update Virtual CQ cnt for hw_module:1\n");
++		}
++		spin_unlock((spinlock_t *)(&virtual_cqcnt_lock));
++		break;
+ 	default:
+ 	{
+ 		LOG_NOTICE("Unknown Cmd(%d)\n", Cmd);
+@@ -9424,6 +9449,7 @@
+ 	case ISP_SET_PM_QOS_INFO:
+ 	case ISP_SET_PM_QOS:
+ 	case ISP_SET_SEC_DAPC_REG:
++	case ISP_SET_VIR_CQCNT:
+ 		return filp->f_op->unlocked_ioctl(filp, cmd, arg);
+ 	default:
+ 		return -ENOIOCTLCMD;
+@@ -10324,6 +10350,7 @@
+ 		spin_lock_init(&(SpinLock_P2FrameList));
+ 		spin_lock_init(&(SpinLockRegScen));
+ 		spin_lock_init(&(SpinLock_UserKey));
++		spin_lock_init(&(virtual_cqcnt_lock));
+ 		#ifdef ENABLE_KEEP_ION_HANDLE
+ 		for (i = 0; i < ISP_DEV_NODE_NUM; i++) {
+ 			if (gION_TBL[i].node != ISP_DEV_NODE_NUM) {
+@@ -14809,9 +14836,18 @@
+ 	spin_unlock(&(IspInfo.SpinLockIrq[module]));
+ 	/*  */
+ 	if (IrqStatus & SOF_INT_ST) {
+-		wake_up_interruptible(&IspInfo.WaitQHeadCam
+-			[ISP_GetWaitQCamIndex(module)]
+-			[ISP_WAITQ_HEAD_IRQ_SOF]);
++		if ((ISP_RD32(CAM_REG_CTL_SPARE2(reg_module))%0x100) != g_virtual_cq_cnt_a) {
++			IRQ_LOG_KEEPER(module, m_CurrentPPB, _LOG_INF,
++			"CAMA PHY cqcnt:%d != VIR cqcnt:%d\n",
++			(ISP_RD32(CAM_REG_CTL_SPARE2(reg_module))%0x100), g_virtual_cq_cnt_a);
++		} else {
++			IRQ_LOG_KEEPER(module, m_CurrentPPB, _LOG_INF,
++			"CAMA PHY cqcnt:%d VIR cqcnt:%d\n",
++			(ISP_RD32(CAM_REG_CTL_SPARE2(reg_module))%0x100), g_virtual_cq_cnt_a);
++			wake_up_interruptible(&IspInfo.WaitQHeadCam
++				[ISP_GetWaitQCamIndex(module)]
++				[ISP_WAITQ_HEAD_IRQ_SOF]);
++		}
+ 	}
+ 	if (IrqStatus & SW_PASS1_DON_ST) {
+ 		wake_up_interruptible(&IspInfo.WaitQHeadCam
+@@ -15418,9 +15454,18 @@
+ 	spin_unlock(&(IspInfo.SpinLockIrq[module]));
+ 	/*  */
+ 	if (IrqStatus & SOF_INT_ST) {
+-		wake_up_interruptible(&IspInfo.WaitQHeadCam
++		if ((ISP_RD32(CAM_REG_CTL_SPARE2(reg_module))%0x100) != g_virtual_cq_cnt_b) {
++			IRQ_LOG_KEEPER(module, m_CurrentPPB, _LOG_INF,
++			"CAMB PHY cqcnt:%d != VIR cqcnt:%d\n",
++			(ISP_RD32(CAM_REG_CTL_SPARE2(reg_module))%0x100), g_virtual_cq_cnt_b);
++		} else {
++			IRQ_LOG_KEEPER(module, m_CurrentPPB, _LOG_INF,
++			"CAMB PHY cqcnt:%d VIR cqcnt:%d\n",
++			(ISP_RD32(CAM_REG_CTL_SPARE2(reg_module))%0x100), g_virtual_cq_cnt_b);
++			wake_up_interruptible(&IspInfo.WaitQHeadCam
+ 			[ISP_GetWaitQCamIndex(module)]
+ 			[ISP_WAITQ_HEAD_IRQ_SOF]);
++		}
+ 	}
+ 	if (IrqStatus & SW_PASS1_DON_ST) {
+ 		wake_up_interruptible(&IspInfo.WaitQHeadCam
+diff -Naur old-micode_selene-r-oss/drivers/misc/mediatek/cameraisp/src/mt6768/inc/camera_isp.h micode_selene-r-oss-update/drivers/misc/mediatek/cameraisp/src/mt6768/inc/camera_isp.h
+--- old-micode_selene-r-oss/drivers/misc/mediatek/cameraisp/src/mt6768/inc/camera_isp.h	2023-09-30 14:32:14.784000191 +0700
++++ micode_selene-r-oss-update/drivers/misc/mediatek/cameraisp/src/mt6768/inc/camera_isp.h	2023-09-30 10:01:15.588000012 +0700
+@@ -685,8 +685,9 @@
+ 	ISP_CMD_SET_PM_QOS,
+ 	ISP_CMD_SET_PM_QOS_INFO,
+ 	ISP_CMD_TRANSFOR_CCU_REG,
+-	ISP_CMD_SET_SEC_DAPC_REG,
+-	ISP_CMD_SET_SEC_ENABLE
++	ISP_CMD_SET_SEC_ENABLE,
++	ISP_CMD_SET_VIR_CQCNT,
++	ISP_CMD_SET_SEC_DAPC_REG
+ };
+ 
+ enum ISP_HALT_DMA_ENUM {
+@@ -805,6 +806,8 @@
+ 	_IOWR(ISP_MAGIC, ISP_CMD_TRANSFOR_CCU_REG,  unsigned char*)
+ #define ISP_SET_SEC_ENABLE \
+ 	_IOW(ISP_MAGIC, ISP_CMD_SET_SEC_ENABLE, unsigned int)
++#define ISP_SET_VIR_CQCNT \
++	_IOWR(ISP_MAGIC, ISP_CMD_SET_VIR_CQCNT, unsigned int)
+ 
+ #ifdef CONFIG_COMPAT
+ #define COMPAT_ISP_READ_REGISTER      \
+@@ -847,6 +850,8 @@
+ #define COMPAT_ISP_SET_MEM_INFO       \
+ 	_IOWR(ISP_MAGIC, ISP_CMD_SET_MEM_INFO, \
+ 					struct compat_ISP_MEM_INFO_STRUCT)
++#define COMPAT_ISP_SET_VIR_CQCNT      \
++	_IOWR(ISP_MAGIC, ISP_CMD_SET_VIR_CQCNT, unsigned int)
+ #endif
+ 
+ int32_t ISP_MDPClockOnCallback(uint64_t engineFlag);
