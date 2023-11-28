@@ -8,4 +8,4 @@ do
     pm uninstall --user 0 "$l" 1> /dev/null
     pm clear "$l" 1> /dev/null
   fi
-done < "$(pwd)/happychristmas.txt"
+done < "$(pwd)/target.txt"
