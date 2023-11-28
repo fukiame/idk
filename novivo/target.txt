@@ -1,7 +1,8 @@
 # -- auto app remover
 #    list fetched from vivo y31i - funtouchos 2.1 android 5
 # all apps in this list can technically be uninstalled,
-# provided you have alrternatives for some apps like the launcher
+# provided you have alternatives for some apps like the launcher
+# ------
 
 # the default weird browser thing
 com.vivo.browser
