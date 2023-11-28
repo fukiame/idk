@@ -1,7 +1,7 @@
 while read -r l
 do
-  if [ $(expr "$l" : "#*") -gt 0 ]; then echo "$l"
-  elif [ $(expr "$l" : ":*") -gt 0 ]; then echo "  skipping $l"
+  if [ "$l" = "#"* ]; then echo "$l"
+  elif [ "$l" = ":"* ]; then echo "  skipping $l"
   elif [ "$l" = "" ]; then :
   else
     echo "  removing $l"
