@@ -4,7 +4,8 @@ do
   else if [ "$l" = ":"* ]; then echo "skipping $l"
   else if [ "$l" = "" ]; then :
   else
-    pm uninstall --user 0 "$line"
-    pm clear "$line"
+    echo "  removing $l"
+    pm uninstall --user 0 "$l"
+    pm clear "$l"
   fi
 done < "$(pwd)/happychristmas.txt"
