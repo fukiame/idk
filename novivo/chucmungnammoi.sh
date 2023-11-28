@@ -1,5 +1,9 @@
-while read -r line
+while read -r l
 do
-  pm uninstall --user 0 "$line"
-  pm clear "$line"
+  if [ "$l" = *"#"* ]; then
+    echo "$l"
+  else
+    pm uninstall --user 0 "$line"
+    pm clear "$line"
+  fi
 done < "$(pwd)/happychristmas.txt"
